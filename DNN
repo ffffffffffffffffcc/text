@@ -1,0 +1,55 @@
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+x = np.arange(0.475, 0.525, 5e-5).reshape(-1,1)
+big = (x<=0.5).astype(np.float64) + 1
+y = 6*big*(x**2)
+data_set = tf.data.Dataset.from_tensor_slices((x,y))
+data_set = data_set.batch(32).shuffle(100)
+
+model = Sequential()
+model.add(Dense(20, activation='elu'))
+model.add(Dense(20, activation='elu'))
+model.add(Dense(20, activation='elu'))
+model.add(Dense(1, activation='elu'))
+
+EPOCHS = 30
+optimizer = tf.optimizers.Adam()
+
+Loss = []
+for epoch in range(EPOCHS):
+    for x,y in data_set:
+        with tf.GradientTape() as tape:
+            with tf.GradientTape() as g:
+                g.watch(x)
+                with tf.GradientTape() as gg:
+                    gg.watch(x)
+                    y_ = model(x)
+                g_1 = gg.gradient(y_, x)
+            g_2 = g.gradient(g_1, x)
+            loss_1 = tf.metrics.mse(y, g_2)
+            loss_1 = tf.cast(tf.sqrt(tf.reduce_mean(loss_1)), tf.float64)
+            loss_2 = tf.abs(model(np.array([[0.525]]))-model(np.array([[0.475]])))
+            x_ = tf.constant([[0.525], [0.475]])
+            with tf.GradientTape() as ggg:
+                ggg.watch(x_)
+                yy = model(x_)
+            g_3 = ggg.gradient(yy, x_)
+            loss_3 = tf.abs(2*g_3[0] - g_3[1])
+            loss = loss_1 + 10*tf.cast(loss_2, tf.float64) + tf.cast(loss_3, tf.float64)
+        gradients = tape.gradient(loss, model.trainable_variables)
+        optimizer.apply_gradients(zip(gradients, model.trainable_variables))
+        Loss.append(loss)
+
+
+plt.plot(tf.reshape(Loss, [-1,1]))
+
+model(np.array([[0.525]]))
+
+x = np.arange(0.475, 0.525, 1e-3).reshape(-1,1,1)
+y = tf.reshape(model(x), [-1])
+plt.plot(x.reshape(-1), y)
