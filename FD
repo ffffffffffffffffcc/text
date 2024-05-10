@@ -1,0 +1,88 @@
+function [yc,yd,xa,xb,x,y]=subdivision2(a,b,c,d,h)
+%yc,yd,xa,xb分别为对应边界点的取值
+%h为x轴和y轴方向的步长，即取h1=h2=h
+%对应的区域为[a,b]×[c,d]
+M=(b-a)/h;%剖分
+N=(d-c)/h;
+yc=zeros(M-1,1);%初始量
+yd=zeros(M-1,1);
+xa=zeros(N-1,1);
+xb=zeros(N-1,1);
+x=zeros(M-1,1);
+y=zeros(N-1,1);
+for i=1:M-1%上下边界
+    x(i)=a+i*h;
+    yc(i)=x(i)^2;%y=c边界上的值
+    yd(i)=(x(i)-2)^2;%y=d
+end
+for i=1:N-1%左右边界
+    y(i)=c+i*h;
+    xa(i)=y(i)^2;%x=a
+    xb(i)=(y(i)-1)^2;%x=b
+end
+function [H] = Matrix2(M,N)%(M-1)*(N-1)为方程组的阶数
+H=cell(N-1,N-1);
+for i=1:N-1
+    for j=1:N-1
+        if i==j%主对角线
+            H(i,j)={diag(ones(1,M-1)*4)-diag(ones(1,M-2),1)-diag(ones(1,M-2),-1)};
+        else
+if i==j-1||i==j+1%次对角线
+   H(i,j)={-eye(M-1)};
+else%其他地方
+H(i,j)={zeros(M-1,M-1)};
+end
+        end
+    end
+end
+H=cell2mat(H);%cell类型转换为mat
+end
+function[error,Uh,t]=ellipticequations1(a,b,c,d,h)%矩形区域
+%yc,yd,xa,xb分别为对应边界点的取值
+%h为x轴和y轴方向的步长，即取h1=h2=h
+%对应的区域为[a,b]×[c,d]
+%error为误差，Uh为数值解，t为精确解
+M=(b-a)/h;
+N=(d-c)/h;
+f=f(x,y);%输入函数f(x,y)的值
+[yc,yd,xa,xb,x,y]=subdivision2(a,b,c,d,h);%区域剖分，并求边界值
+t=zeros((M-1)*(N-1),1);%精确值
+K=(h^2)*f*ones((M-1)*(N-1),1);%处理边界
+if M>=3&&N>=3 %特殊情形的处理
+K(1)=yc(1)+xa(1)+f*(h^2);
+K(M-1)=yc(M-1)+xb(1)+f*(h^2);
+K((N-1)*(M-1))=xb(N-1)+yd(M-1)+f*(h^2);
+K(1+(M-1)*(N-2))=xa(N-1)+yd(1)+f*(h^2);
+else
+    K(1)=K(1)+xa(1)+yc(1)+xb(1);
+    K((M-1)*(N-1))=K((M-1)*(N-1))+xa(N-1)+xb(N-1)+yd(1);
+end
+A=zeros(M-1,N-1);
+uh=zeros(N+1,M+1);%数值解矩阵
+[H] = Matrix2(M,N);%产生方程组的系数矩阵
+%特殊情形处理
+if M>=4
+for i=2:M-2
+    K(i)=K(i)+yc(i);
+end
+for i=2+(N-2)*(M-1):(N-1)*(M-1)-1
+    K(i)=K(i)+yd(i-(N-2)*(M-1));
+end
+end
+if N>=4
+for j=1:N-3
+    K(M+(j-1)*(M-1))=K(M+(j-1)*(M-1))+xa(j+1);
+    K(2*M-2+(j-1)*(M-1))=K(2*M-2+(j-1)*(M-1))+xb(j+1);
+end
+end
+Uh=H\K;%求解
+for j=1:N-1%精确值的产生
+    for i=1:M-1
+        A(i,j)=(x(i)-y(j))^2;
+    end
+end
+for i=1:N-1
+    t(1+(i-1)*(M-1):i*(M-1))=A(:,i);
+end
+%error=norm(Uh-t);%误差
+error=max(abs(Uh-t));%误差
